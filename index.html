@@ -1,0 +1,423 @@
+
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1976D2">
+  <title>ESP32 Firmware Update</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, "Noto Sans TC", sans-serif;
+      background: #f2f4f8;
+      margin: 0;
+      padding: 24px 12px;
+      color: #222;
+    }
+
+    .container {
+      max-width: 420px;
+      margin: 30px auto;
+      padding: 24px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+    }
+
+    h2 {
+      text-align: center;
+      margin-top: 0;
+      color: #1976D2;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+
+    label {
+      display: block;
+      margin: 14px 0 6px;
+      font-weight: bold;
+    }
+
+    input {
+      width: 100%;
+      padding: 11px;
+      border: 1px solid #bbb;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 14px;
+      border: none;
+      border-radius: 6px;
+      background: #1976D2;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #125CA1;
+    }
+
+    button:disabled {
+      background: #999;
+      cursor: not-allowed;
+    }
+
+    .secondary {
+      background: #555;
+    }
+
+    .secondary:hover {
+      background: #333;
+    }
+
+    .info {
+      margin-top: 20px;
+      padding: 14px;
+      background: #f3f7fc;
+      border-radius: 8px;
+      overflow-wrap: anywhere;
+      line-height: 1.7;
+    }
+
+    .status {
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 6px;
+      background: #eee;
+      overflow-wrap: anywhere;
+      line-height: 1.6;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .version {
+      color: #1976D2;
+      font-weight: bold;
+    }
+
+    .small {
+      color: #666;
+      font-size: 12px;
+      line-height: 1.6;
+      margin-top: 18px;
+    }
+
+    a {
+      color: #1976D2;
+      overflow-wrap: anywhere;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="container">
+    <h2>ESP32 OTA 更新系統</h2>
+    <p class="subtitle">GitHub Firmware Update</p>
+
+    <!-- 登入區域 -->
+    <section id="loginSection">
+      <form id="loginForm">
+        <label for="userid">帳號 Username</label>
+        <input
+          id="userid"
+          type="text"
+          autocomplete="username"
+          required
+          placeholder="請輸入帳號"
+        >
+
+        <label for="password">密碼 Password</label>
+        <input
+          id="password"
+          type="password"
+          autocomplete="current-password"
+          required
+          placeholder="請輸入密碼"
+        >
+
+        <button type="submit">登入</button>
+      </form>
+    </section>
+
+    <!-- 更新區域 -->
+    <section id="updateSection" class="hidden">
+      <label for="esp32ip">ESP32 IP 位址</label>
+      <input
+        id="esp32ip"
+        type="text"
+        placeholder="例如 192.168.1.100"
+        value=""
+      >
+
+      <div class="info">
+        <div>GitHub 最新版本：<span id="latestVersion" class="version">讀取中...</span></div>
+        <div>韌體網址：</div>
+        <a id="firmwareLink" href="#" target="_blank" rel="noopener noreferrer">尚未取得</a>
+      </div>
+
+      <button id="checkButton" type="button">
+        檢查 GitHub 版本
+      </button>
+
+      <button id="updateButton" type="button">
+        前往 ESP32 更新頁面
+      </button>
+
+      <button id="logoutButton" type="button" class="secondary">
+        登出
+      </button>
+    </section>
+
+    <div id="status" class="status" role="status" aria-live="polite">
+      請登入以繼續。
+    </div>
+
+    <p class="small">
+      版本資訊來自 GitHub version.json。此網頁不會直接寫入 ESP32 韌體；
+      OTA 更新由 ESP32 裝置端執行。
+    </p>
+  </main>
+
+  <script>
+    // ==============================
+    // GitHub JSON 設定
+    // ==============================
+
+    const VERSION_JSON_URL =
+      "https://raw.githubusercontent.com/leann0630/wifi1019/main/version.json";
+
+    // 示範用途：前端帳密不是安全驗證。
+    // 正式系統應由 ESP32 端驗證權限。
+    const LOGIN_USERNAME = "123456";
+    const LOGIN_PASSWORD = "123456";
+
+    let latestFirmware = null;
+
+    // ==============================
+    // DOM 元素
+    // ==============================
+
+    const loginSection = document.getElementById("loginSection");
+    const updateSection = document.getElementById("updateSection");
+    const loginForm = document.getElementById("loginForm");
+    const statusBox = document.getElementById("status");
+
+    const latestVersionElement =
+      document.getElementById("latestVersion");
+
+    const firmwareLink =
+      document.getElementById("firmwareLink");
+
+    const checkButton =
+      document.getElementById("checkButton");
+
+    const updateButton =
+      document.getElementById("updateButton");
+
+    // ==============================
+    // 狀態訊息
+    // ==============================
+
+    function showStatus(message) {
+      statusBox.textContent = message;
+    }
+
+    // ==============================
+    // 登入
+    // ==============================
+
+    loginForm.addEventListener("submit", async function(event) {
+      event.preventDefault();
+
+      const username =
+        document.getElementById("userid").value.trim();
+
+      const password =
+        document.getElementById("password").value;
+
+      if (
+        username !== LOGIN_USERNAME ||
+        password !== LOGIN_PASSWORD
+      ) {
+        showStatus("帳號或密碼錯誤。");
+        return;
+      }
+
+      loginSection.classList.add("hidden");
+      updateSection.classList.remove("hidden");
+
+      showStatus("登入成功，正在讀取 GitHub 版本資訊……");
+
+      await loadVersion();
+    });
+
+    // ==============================
+    // 讀取 GitHub version.json
+    // ==============================
+
+    async function loadVersion() {
+      checkButton.disabled = true;
+      latestVersionElement.textContent = "讀取中……";
+
+      try {
+        const response = await fetch(
+          VERSION_JSON_URL + "?t=" + Date.now(),
+          {
+            method: "GET",
+            cache: "no-store"
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("HTTP " + response.status);
+        }
+
+        const data = await response.json();
+
+        if (
+          typeof data.version !== "string" ||
+          typeof data.firmware_url !== "string"
+        ) {
+          throw new Error("JSON 缺少 version 或 firmware_url");
+        }
+
+        // 只接受 HTTPS 韌體網址
+        const parsedURL = new URL(data.firmware_url);
+
+        if (parsedURL.protocol !== "https:") {
+          throw new Error("韌體網址必須使用 HTTPS");
+        }
+
+        latestFirmware = {
+          version: data.version,
+          firmware_url: parsedURL.href
+        };
+
+        latestVersionElement.textContent =
+          latestFirmware.version;
+
+        firmwareLink.href =
+          latestFirmware.firmware_url;
+
+        firmwareLink.textContent =
+          latestFirmware.firmware_url;
+
+        showStatus(
+          "已成功取得 GitHub 最新版本：" +
+          latestFirmware.version
+        );
+
+      } catch (error) {
+        latestFirmware = null;
+
+        latestVersionElement.textContent = "讀取失敗";
+        firmwareLink.removeAttribute("href");
+        firmwareLink.textContent = "無法取得韌體網址";
+
+        showStatus(
+          "讀取版本失敗：" + error.message +
+          "。請確認 version.json 已提交至 main 分支，" +
+          "且網路連線正常。"
+        );
+
+      } finally {
+        checkButton.disabled = false;
+      }
+    }
+
+    // ==============================
+    // 手動檢查版本
+    // ==============================
+
+    checkButton.addEventListener("click", loadVersion);
+
+    // ==============================
+    // 前往 ESP32 OTA 頁面
+    // ==============================
+
+    updateButton.addEventListener("click", function() {
+      const ipInput =
+        document.getElementById("esp32ip").value.trim();
+
+      if (!ipInput) {
+        showStatus("請先輸入 ESP32 IP 位址。");
+        return;
+      }
+
+      let target;
+
+      try {
+        // 允許使用者輸入 IP 或 http://IP
+        target = new URL(
+          ipInput.includes("://")
+            ? ipInput
+            : "http://" + ipInput
+        );
+      } catch (error) {
+        showStatus("ESP32 IP 位址格式不正確。");
+        return;
+      }
+
+      if (
+        target.protocol !== "http:" ||
+        !target.hostname ||
+        target.username ||
+        target.password ||
+        (target.pathname !== "/" && target.pathname !== "") ||
+        target.search ||
+        target.hash
+      ) {
+        showStatus(
+          "請輸入有效的 ESP32 HTTP 網址，例如 192.168.1.100"
+        );
+        return;
+      }
+
+      if (!latestFirmware) {
+        showStatus("請先成功讀取 GitHub 版本資訊。");
+        return;
+      }
+
+      showStatus(
+        "正在前往 ESP32 更新頁面。請在 ESP32 頁面確認更新。"
+      );
+
+      window.location.href =
+        target.origin + "/serverIndex";
+    });
+
+    // ==============================
+    // 登出
+    // ==============================
+
+    document.getElementById("logoutButton")
+      .addEventListener("click", function() {
+        loginForm.reset();
+
+        loginSection.classList.remove("hidden");
+        updateSection.classList.add("hidden");
+
+        latestFirmware = null;
+
+        showStatus("已登出。");
+      });
+  </script>
+</body>
+</html>
