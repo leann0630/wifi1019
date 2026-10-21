@@ -13,13 +13,13 @@ ssid = "labor"
 password = "98668800"
 
 # ===== OTA version =====
-CURRENT_VERSION = "1.0.1"
+CURRENT_VERSION = "1.1.35"
 
 # 填入實際 GitHub Pages 網址
 VERSION_URL = "https://leann0630.github.io/wifi1019/version.json"
 
 # 每 6 小時檢查一次
-OTA_CHECK_INTERVAL = 6 * 60 * 60
+OTA_CHECK_INTERVAL = 60
 last_ota_check = time.time()
 
 # ===== WiFi connection =====
@@ -79,7 +79,10 @@ def check_for_update():
             response.close()
 
     remote_version = doc.get("version")
-    firmware_url = doc.get("firmware")
+    firmware_url = doc.get("firmware_url")
+    
+    print(remote_version)
+    print( firmware_url )
 
     if not remote_version or not firmware_url:
         print("[OTA] Missing version or firmware URL")
@@ -91,6 +94,7 @@ def check_for_update():
     if not is_newer_version(remote_version, CURRENT_VERSION):
         print("[OTA] Already up to date")
         return "Already up to date"
+        CURRENT_VERSION = remote_version
 
     # 此版本更新的是 MicroPython main.py 程式碼，
     # 不是 Arduino 的 .bin 韌體。
