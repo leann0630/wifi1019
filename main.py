@@ -13,7 +13,7 @@ ssid = "labor"
 password = "98668800"
 
 # ===== OTA version =====
-CURRENT_VERSION = "1.1.35"
+CURRENT_VERSION = "1.1.37"
 
 # 填入實際 GitHub Pages 網址
 VERSION_URL = "https://leann0630.github.io/wifi1019/version.json"
